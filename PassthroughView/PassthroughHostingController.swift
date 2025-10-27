@@ -35,20 +35,27 @@ class PassthroughHostingController<Content: View>: UIHostingController<Content> 
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
             guard let hitView = super.hitTest(point, with: event) else { return nil }
 
-            // 1. Don’t intercept self, or fully transparent views
-            if hitView === self || hitView.isHidden || hitView.alpha < 0.01 {
-                return nil
+            // 1. If the hit view is the PassthroughView itself (the overall background).
+            if hitView === self {
+                // Use the pixel check to decide if the background is clear.
+                if isTransparent(at: point) {
+                    return nil // Transparent background -> PASS THROUGH
+                }
+                return hitView // Opaque background -> BLOCK (Shouldn't happen with .clear)
+            }
+            
+            // 2. If the hit view is a child view (the SwiftUI content, e.g., the sheet).
+            
+            // If the child view's touch point is not visually rendered (e.g., the gap
+            // between views or a clipped corner on the sheet's background).
+            // We still need this check to pass through holes *within* the sheet's views.
+            if isTransparent(at: point) {
+                return nil // Pass through if the pixel is visually clear
             }
 
-            // 2. Perform the pixel transparency check on the view that was hit.
-            // If this pixel is visually transparent, pass through.
-            if hitView.isTransparent(at: point) {
-                return nil
-            }
-
-            // 3. Otherwise (visually opaque area), block the touch and return the hit view.
-            // This makes Text, Image, and Button all block the touch.
-            return hitView
+            // The touch landed on an opaque pixel *within the sheet's content* (Text, Button, Sheet Background).
+            // To guarantee Text blocks the touch (fixing the cross-version issue), we simply block it here.
+            return hitView // BLOCK TOUCH
         }
     }
 }
